@@ -1,4 +1,3 @@
-
 /**
  * YouTube Force Buffer - Content Script
  * Forces complete video buffering on YouTube videos
@@ -12,7 +11,7 @@
     checkInterval: 1000,         // How often to check video buffer status (ms)
     seekStepSize: 30,            // How far to seek ahead when forcing buffer (seconds)
     maxSeekAttempts: 100,        // Maximum number of seek attempts
-    debugMode: false             // Enable console logging for debugging
+    debugMode: true              // Enable console logging for debugging
   };
   
   let videoElement = null;
