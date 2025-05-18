@@ -3,8 +3,11 @@
   "manifest_version": 3,
   "name": "YouTube Force Buffer",
   "version": "1.0.0",
-  "description": "Forces complete video buffering on YouTube videos",
-  "permissions": ["storage"],
+  "description": "Forces complete video buffering on YouTube videos and fixes stuck loading videos",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
   "host_permissions": ["*://*.youtube.com/*"],
   "background": {
     "service_worker": "background.js"

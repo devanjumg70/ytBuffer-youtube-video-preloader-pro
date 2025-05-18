@@ -1,6 +1,7 @@
+
 /**
  * YouTube Force Buffer - Content Script
- * Forces complete video buffering on YouTube videos
+ * Forces complete video buffering on YouTube videos and fixes stuck loading videos
  */
 
 (function() {
@@ -11,7 +12,10 @@
     checkInterval: 1000,         // How often to check video buffer status (ms)
     seekStepSize: 30,            // How far to seek ahead when forcing buffer (seconds)
     maxSeekAttempts: 100,        // Maximum number of seek attempts
-    debugMode: true              // Enable console logging for debugging
+    debugMode: true,             // Enable console logging for debugging
+    loadingTimeoutSecs: 10,      // Time (seconds) to wait before considering a video stuck in loading
+    loadingFixAttempts: 3,       // Number of attempts to fix a stuck loading video
+    loadingFixDelay: 1500        // Delay between loading fix attempts (ms)
   };
   
   let videoElement = null;
@@ -20,6 +24,10 @@
   let isBuffering = false;
   let seekAttempts = 0;
   let bufferCheckInterval = null;
+  let loadingFixTimer = null;
+  let loadingFixAttempts = 0;
+  let lastProgressTime = 0;
+  let isStuckInLoading = false;
   
   /**
    * Debug logger that only logs when debug mode is enabled
@@ -83,6 +91,113 @@
     }
     
     return maxBufferedEnd;
+  };
+  
+  /**
+   * Detects if a video is stuck in the loading state
+   * @param {HTMLVideoElement} video - The video element to check
+   * @returns {boolean} - Whether the video is stuck in loading
+   */
+  const isVideoStuckInLoading = (video) => {
+    if (!video || video.readyState >= 3 || video.currentTime > 0.5) {
+      return false;
+    }
+    
+    // Check if we've had no progress for a while
+    const now = Date.now();
+    if (lastProgressTime === 0) {
+      lastProgressTime = now;
+      return false;
+    }
+    
+    // If the video has been stuck in loading state for too long, consider it stuck
+    return (now - lastProgressTime) > (config.loadingTimeoutSecs * 1000);
+  };
+  
+  /**
+   * Attempts to fix a video that's stuck in the loading state
+   * @param {HTMLVideoElement} video - The video element to fix
+   */
+  const fixStuckLoadingVideo = (video) => {
+    if (!video || loadingFixAttempts >= config.loadingFixAttempts) {
+      debugLog('Max loading fix attempts reached, giving up');
+      isStuckInLoading = false;
+      loadingFixAttempts = 0;
+      return;
+    }
+    
+    debugLog(`Attempting to fix stuck loading video (attempt ${loadingFixAttempts + 1}/${config.loadingFixAttempts})`);
+    
+    // Try different techniques to unstick the video
+    try {
+      // Force readyState by seeking to the beginning
+      video.currentTime = 0;
+      
+      // Try toggling play/pause
+      if (video.paused) {
+        video.play().catch(e => debugLog('Error trying to play:', e));
+      } else {
+        video.pause();
+        setTimeout(() => video.play().catch(e => debugLog('Error trying to play:', e)), 300);
+      }
+      
+      // Try to force a quality change by accessing YouTube's player API
+      const ytPlayer = findYouTubePlayer();
+      if (ytPlayer && typeof ytPlayer.getAvailableQualityLevels === 'function') {
+        const qualities = ytPlayer.getAvailableQualityLevels();
+        if (qualities && qualities.length > 1) {
+          const currentQuality = ytPlayer.getPlaybackQuality();
+          const alternateQuality = qualities.find(q => q !== currentQuality) || qualities[0];
+          ytPlayer.setPlaybackQuality(alternateQuality);
+          debugLog(`Changed quality from ${currentQuality} to ${alternateQuality}`);
+        }
+      }
+      
+      // Reset the timeouts and increment attempt counter
+      lastProgressTime = Date.now();
+      loadingFixAttempts++;
+      
+      // Schedule the next attempt
+      if (loadingFixAttempts < config.loadingFixAttempts) {
+        loadingFixTimer = setTimeout(() => {
+          if (video.readyState < 3) {
+            fixStuckLoadingVideo(video);
+          } else {
+            isStuckInLoading = false;
+            loadingFixAttempts = 0;
+            debugLog('Video unstuck from loading state!');
+          }
+        }, config.loadingFixDelay);
+      }
+    } catch (error) {
+      debugLog('Error while trying to fix stuck loading:', error);
+    }
+  };
+  
+  /**
+   * Tries to find YouTube's player API object
+   * @returns {Object|null} - YouTube player API object or null if not found
+   */
+  const findYouTubePlayer = () => {
+    // Try to find YouTube's API from the window object
+    if (window.ytplayer && window.ytplayer.config) {
+      return window.ytplayer.config.player;
+    }
+    
+    // Try to find YouTube's player from the video element
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      // Look up the DOM tree to find YouTube player
+      let element = videoElement;
+      while (element && element !== document.body) {
+        if (element.id === 'movie_player' || element.classList.contains('html5-video-player')) {
+          return element;
+        }
+        element = element.parentElement;
+      }
+    }
+    
+    return null;
   };
   
   /**
@@ -174,6 +289,46 @@
   };
   
   /**
+   * Monitors the video for both buffering and loading issues
+   * @param {HTMLVideoElement} video - The video element to monitor
+   */
+  const monitorVideoState = () => {
+    if (!videoElement) return;
+    
+    // Check if video is stuck in loading state
+    if (!isStuckInLoading && isVideoStuckInLoading(videoElement)) {
+      debugLog('Video appears to be stuck in loading state');
+      isStuckInLoading = true;
+      loadingFixAttempts = 0;
+      fixStuckLoadingVideo(videoElement);
+    }
+    
+    // If video is playing normally now, reset the loading detection
+    if (isStuckInLoading && videoElement.readyState >= 3 && videoElement.currentTime > 0.5) {
+      debugLog('Video recovered from loading state');
+      isStuckInLoading = false;
+      loadingFixAttempts = 0;
+      lastProgressTime = 0;
+      if (loadingFixTimer) {
+        clearTimeout(loadingFixTimer);
+        loadingFixTimer = null;
+      }
+    }
+    
+    // Check if video needs buffer forcing
+    if (!isStuckInLoading && !isVideoFullyBuffered(videoElement)) {
+      forceBuffering();
+    } else if (isBuffering) {
+      stopBuffering();
+    }
+    
+    // Update lastProgressTime when the video makes progress
+    if (videoElement.readyState > 1 && videoElement.currentTime > 0) {
+      lastProgressTime = Date.now();
+    }
+  };
+  
+  /**
    * Starts monitoring the video buffer
    */
   const startBufferMonitoring = (video) => {
@@ -182,16 +337,25 @@
     }
     
     videoElement = video;
-    debugLog('Starting buffer monitoring');
+    debugLog('Starting video monitoring');
     
-    bufferCheckInterval = setInterval(() => {
-      // Only force buffering when video is playing and not already fully buffered
-      if (videoElement && !isVideoFullyBuffered(videoElement)) {
-        forceBuffering();
-      } else if (isBuffering) {
-        stopBuffering();
-      }
-    }, config.checkInterval);
+    // Add event listeners to detect stalled/waiting states
+    video.addEventListener('waiting', () => {
+      debugLog('Video entered waiting state');
+      lastProgressTime = Date.now();
+    });
+    
+    video.addEventListener('playing', () => {
+      debugLog('Video started playing');
+      lastProgressTime = Date.now();
+    });
+    
+    video.addEventListener('stalled', () => {
+      debugLog('Video stalled');
+    });
+    
+    // Start the monitoring interval
+    bufferCheckInterval = setInterval(monitorVideoState, config.checkInterval);
   };
   
   /**
@@ -203,12 +367,29 @@
       bufferCheckInterval = null;
     }
     
+    if (loadingFixTimer) {
+      clearTimeout(loadingFixTimer);
+      loadingFixTimer = null;
+    }
+    
     if (isBuffering) {
       stopBuffering();
     }
     
+    if (videoElement) {
+      // Remove event listeners
+      videoElement.removeEventListener('waiting', () => {});
+      videoElement.removeEventListener('playing', () => {});
+      videoElement.removeEventListener('stalled', () => {});
+    }
+    
+    // Reset all state variables
     videoElement = null;
-    debugLog('Stopped buffer monitoring');
+    isStuckInLoading = false;
+    loadingFixAttempts = 0;
+    lastProgressTime = 0;
+    
+    debugLog('Stopped video monitoring');
   };
   
   /**
