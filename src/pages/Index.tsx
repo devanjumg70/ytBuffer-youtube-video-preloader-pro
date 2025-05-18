@@ -6,7 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Github, Twitter } from "lucide-react";
+import { Github, Twitter, Info, Check } from "lucide-react";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { toast } from "@/components/ui/sonner";
 
 const Index = () => {
   const [isEnabled, setIsEnabled] = React.useState(true);
@@ -17,15 +24,19 @@ const Index = () => {
     // In a real implementation, this would save to chrome.storage
     // and communicate with the content script
     console.log('Settings saved:', { isEnabled, debugMode, bufferTimeout });
-    // Add a fake success message as this is just a demo UI
-    alert('Settings saved successfully!');
+    
+    // Show toast notification instead of alert
+    toast.success("Settings saved successfully!", {
+      description: "Your preferences have been updated",
+      icon: <Check className="h-4 w-4" />
+    });
   };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in">
         {/* Feature Card 1 */}
-        <Card className="bg-white shadow-md">
+        <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Smart Buffering</CardTitle>
           </CardHeader>
@@ -37,7 +48,7 @@ const Index = () => {
         </Card>
 
         {/* Feature Card 2 */}
-        <Card className="bg-white shadow-md">
+        <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Loading Fix</CardTitle>
           </CardHeader>
@@ -49,7 +60,7 @@ const Index = () => {
         </Card>
 
         {/* Feature Card 3 */}
-        <Card className="bg-white shadow-md">
+        <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Performance Monitor</CardTitle>
           </CardHeader>
@@ -62,7 +73,7 @@ const Index = () => {
       </div>
 
       {/* Main Settings Card */}
-      <Card className="w-full max-w-md mb-8">
+      <Card className="w-full max-w-md mb-8 hover:shadow-lg transition-all duration-300">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl">YTBuffer</CardTitle>
@@ -73,32 +84,70 @@ const Index = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="extension-toggle" className="text-base font-medium">
-              Enable Extension
-            </Label>
+          <div className="flex items-center justify-between group">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="extension-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
+                      Enable Extension
+                    </Label>
+                    <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Turn the extension on or off globally</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Switch
               id="extension-toggle"
               checked={isEnabled}
               onCheckedChange={setIsEnabled}
+              className="data-[state=checked]:bg-primary"
             />
           </div>
           
-          <div className="flex items-center justify-between">
-            <Label htmlFor="debug-toggle" className="text-base font-medium">
-              Debug Mode
-            </Label>
+          <div className="flex items-center justify-between group">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="debug-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
+                      Debug Mode
+                    </Label>
+                    <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Shows performance metrics and logs in the console</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Switch
               id="debug-toggle"
               checked={debugMode}
               onCheckedChange={setDebugMode}
+              className="data-[state=checked]:bg-primary"
             />
           </div>
           
-          <div className="space-y-2">
-            <Label htmlFor="buffer-timeout" className="text-base font-medium">
-              Loading Timeout (seconds): {bufferTimeout}
-            </Label>
+          <div className="space-y-2 group">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="buffer-timeout" className="text-base font-medium group-hover:text-primary transition-colors">
+                      Loading Timeout (seconds): {bufferTimeout}
+                    </Label>
+                    <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Maximum time to wait before attempting to fix a stuck video</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Slider
               id="buffer-timeout" 
               min={5}
@@ -106,36 +155,40 @@ const Index = () => {
               step={1}
               value={[bufferTimeout]}
               onValueChange={(values) => setBufferTimeout(values[0])}
+              className="cursor-pointer"
             />
           </div>
         </CardContent>
         <CardFooter>
-          <Button className="w-full" onClick={handleSave}>
+          <Button 
+            className="w-full hover:bg-primary/90 transition-colors" 
+            onClick={handleSave}
+          >
             Save Settings
           </Button>
         </CardFooter>
       </Card>
 
       {/* How It Works Section */}
-      <Card className="w-full max-w-4xl mb-8">
+      <Card className="w-full max-w-4xl mb-8 hover:shadow-lg transition-all duration-300">
         <CardHeader>
           <CardTitle className="text-xl">How YTBuffer Works</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-300">
               <h3 className="font-medium mb-2 text-primary">Step 1</h3>
               <p className="text-sm text-gray-600">
                 Detects when YouTube videos are loading or stuck in buffering state.
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-300">
               <h3 className="font-medium mb-2 text-primary">Step 2</h3>
               <p className="text-sm text-gray-600">
                 Applies smart recovery techniques to force complete buffering or fix loading issues.
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-300">
               <h3 className="font-medium mb-2 text-primary">Step 3</h3>
               <p className="text-sm text-gray-600">
                 Monitors playback to ensure videos play smoothly without interruptions.
@@ -146,15 +199,15 @@ const Index = () => {
       </Card>
 
       {/* Footer */}
-      <footer className="text-center mt-auto pt-6 pb-4">
+      <footer className="text-center mt-auto pt-6 pb-4 animate-fade-in">
         <p className="text-gray-600 flex items-center justify-center gap-1 mb-2">
-          Made with love by <a href="https://twitter.com/anjumg70" className="text-primary hover:underline ml-1">@anjumg70</a>
+          Made with love by <a href="https://twitter.com/anjumg70" className="text-primary hover:underline ml-1 hover:text-primary/80 transition-colors">@anjumg70</a>
         </p>
         <div className="flex justify-center space-x-4 mt-2">
-          <a href="https://github.com/anjumg70" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-primary transition-colors">
+          <a href="https://github.com/anjumg70" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-primary transition-colors hover:scale-110 transform">
             <Github size={20} />
           </a>
-          <a href="https://twitter.com/anjumg70" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-primary transition-colors">
+          <a href="https://twitter.com/anjumg70" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-primary transition-colors hover:scale-110 transform">
             <Twitter size={20} />
           </a>
         </div>
