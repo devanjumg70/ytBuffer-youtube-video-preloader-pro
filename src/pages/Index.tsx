@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Github, Twitter, Info, Check } from "lucide-react";
+import { Github, Twitter, Info, Check, CirclePercent, SlidersHorizontal, ToggleRight } from "lucide-react";
 import { 
   Tooltip,
   TooltipContent,
@@ -19,11 +19,21 @@ const Index = () => {
   const [isEnabled, setIsEnabled] = React.useState(true);
   const [debugMode, setDebugMode] = React.useState(false);
   const [bufferTimeout, setBufferTimeout] = React.useState(10);
+  const [bufferPercentage, setBufferPercentage] = React.useState(25);
+  const [autoPauseEnabled, setAutoPauseEnabled] = React.useState(true);
+  const [preloadQuality, setPreloadQuality] = React.useState('auto');
 
   const handleSave = () => {
     // In a real implementation, this would save to chrome.storage
     // and communicate with the content script
-    console.log('Settings saved:', { isEnabled, debugMode, bufferTimeout });
+    console.log('Settings saved:', { 
+      isEnabled, 
+      debugMode, 
+      bufferTimeout,
+      bufferPercentage,
+      autoPauseEnabled,
+      preloadQuality
+    });
     
     // Show toast notification instead of alert
     toast.success("Settings saved successfully!", {
@@ -38,7 +48,10 @@ const Index = () => {
         {/* Feature Card 1 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Smart Buffering</CardTitle>
+            <div className="flex items-center gap-2">
+              <CirclePercent className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Smart Buffering</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600">
@@ -50,7 +63,10 @@ const Index = () => {
         {/* Feature Card 2 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Loading Fix</CardTitle>
+            <div className="flex items-center gap-2">
+              <ToggleRight className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Loading Fix</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600">
@@ -62,7 +78,10 @@ const Index = () => {
         {/* Feature Card 3 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Performance Monitor</CardTitle>
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Performance Monitor</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600">
@@ -84,79 +103,169 @@ const Index = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between group">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="extension-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
-                      Enable Extension
-                    </Label>
-                    <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>Turn the extension on or off globally</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Switch
-              id="extension-toggle"
-              checked={isEnabled}
-              onCheckedChange={setIsEnabled}
-              className="data-[state=checked]:bg-primary"
-            />
+          {/* Basic Settings Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Basic Settings</h3>
+            
+            <div className="flex items-center justify-between group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="extension-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
+                        Enable Extension
+                      </Label>
+                      <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Turn the extension on or off globally</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Switch
+                id="extension-toggle"
+                checked={isEnabled}
+                onCheckedChange={setIsEnabled}
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
+            
+            <div className="flex items-center justify-between group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="debug-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
+                        Debug Mode
+                      </Label>
+                      <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Shows performance metrics and logs in the console</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Switch
+                id="debug-toggle"
+                checked={debugMode}
+                onCheckedChange={setDebugMode}
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
           </div>
-          
-          <div className="flex items-center justify-between group">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="debug-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
-                      Debug Mode
-                    </Label>
-                    <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>Shows performance metrics and logs in the console</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Switch
-              id="debug-toggle"
-              checked={debugMode}
-              onCheckedChange={setDebugMode}
-              className="data-[state=checked]:bg-primary"
-            />
-          </div>
-          
-          <div className="space-y-2 group">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="buffer-timeout" className="text-base font-medium group-hover:text-primary transition-colors">
-                      Loading Timeout (seconds): {bufferTimeout}
-                    </Label>
-                    <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Maximum time to wait before attempting to fix a stuck video</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Slider
-              id="buffer-timeout" 
-              min={5}
-              max={30}
-              step={1}
-              value={[bufferTimeout]}
-              onValueChange={(values) => setBufferTimeout(values[0])}
-              className="cursor-pointer"
-            />
+
+          {/* Advanced Buffering Settings Section */}
+          <div className="space-y-4 pt-2 border-t border-gray-100">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider pt-2">Advanced Buffering</h3>
+            
+            <div className="space-y-2 group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="buffer-timeout" className="text-base font-medium group-hover:text-primary transition-colors">
+                        Loading Timeout (seconds): {bufferTimeout}
+                      </Label>
+                      <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Maximum time to wait before attempting to fix a stuck video</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Slider
+                id="buffer-timeout" 
+                min={5}
+                max={30}
+                step={1}
+                value={[bufferTimeout]}
+                onValueChange={(values) => setBufferTimeout(values[0])}
+                className="cursor-pointer"
+              />
+            </div>
+            
+            <div className="space-y-2 group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="buffer-percentage" className="text-base font-medium group-hover:text-primary transition-colors">
+                        Buffer Percentage: {bufferPercentage}%
+                      </Label>
+                      <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Percentage of video to buffer ahead before playing</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Slider
+                id="buffer-percentage" 
+                min={5}
+                max={50}
+                step={5}
+                value={[bufferPercentage]}
+                onValueChange={(values) => setBufferPercentage(values[0])}
+                className="cursor-pointer"
+              />
+            </div>
+            
+            <div className="flex items-center justify-between group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="autopause-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
+                        Auto-Pause on Low Buffer
+                      </Label>
+                      <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Automatically pause video when buffer runs low</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Switch
+                id="autopause-toggle"
+                checked={autoPauseEnabled}
+                onCheckedChange={setAutoPauseEnabled}
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
+            
+            <div className="flex items-center justify-between group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="quality-select" className="text-base font-medium group-hover:text-primary transition-colors">
+                        Preload Quality
+                      </Label>
+                      <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Quality level to use during initial buffering</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <select 
+                id="quality-select"
+                value={preloadQuality}
+                onChange={(e) => setPreloadQuality(e.target.value)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm"
+              >
+                <option value="auto">Auto</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
           </div>
         </CardContent>
         <CardFooter>
