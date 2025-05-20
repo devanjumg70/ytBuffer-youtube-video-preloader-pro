@@ -15,12 +15,10 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Check if we're in a browser extension environment
 const isExtensionEnvironment = typeof chrome !== 'undefined' && 
                               chrome.runtime && 
                               chrome.runtime.sendMessage;
 
-// Define log type for TypeScript
 interface ConsoleLog {
   time: string;
   message: string;
@@ -32,14 +30,12 @@ const Index = () => {
   const [debugMode, setDebugMode] = useState(true);
   const [bufferTimeout, setBufferTimeout] = useState(10);
   const [bufferPercentage, setBufferPercentage] = useState(25);
-  const [autoPauseEnabled, setAutoPauseEnabled] = useState(true);
   const [preloadQuality, setPreloadQuality] = useState('auto');
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Function to handle messages from content scripts
     const handleMessage = (message: any) => {
       try {
         if (message.type === 'LOG_MESSAGE') {
@@ -69,22 +65,16 @@ const Index = () => {
       }
     };
 
-    // Add listener for messages from content script
     if (isExtensionEnvironment) {
       try {
         chrome.runtime.onMessage.addListener(handleMessage);
-        
-        // Initial loading of settings
         loadSettings();
-
-        // Add a welcome message
         addInfoLog('Extension initialized and ready');
       } catch (err) {
         console.error('Failed to set up Chrome message listener:', err);
         setError(`Extension error: ${err instanceof Error ? err.message : String(err)}`);
       }
     } else {
-      // Development mode: Add initial log
       addInfoLog('Running in development mode. Connect to YouTube to see actual logs.');
     }
 
@@ -99,7 +89,6 @@ const Index = () => {
     };
   }, []);
 
-  // Helper functions to add typed logs
   const addInfoLog = (message: string) => {
     setConsoleLogs(logs => [
       ...logs,
@@ -144,7 +133,6 @@ const Index = () => {
     ]);
   };
 
-  // Load settings from Chrome storage
   const loadSettings = () => {
     if (!isExtensionEnvironment) return;
     
@@ -154,7 +142,6 @@ const Index = () => {
         'debugMode', 
         'bufferTimeout', 
         'bufferPercentage',
-        'autoPauseEnabled',
         'preloadQuality'
       ], (result) => {
         if (chrome.runtime.lastError) {
@@ -162,12 +149,10 @@ const Index = () => {
           return;
         }
         
-        // Update state with saved settings or keep defaults
         setIsEnabled(result.isEnabled !== undefined ? result.isEnabled : true);
         setDebugMode(result.debugMode !== undefined ? result.debugMode : true);
         setBufferTimeout(result.bufferTimeout !== undefined ? result.bufferTimeout : 10);
         setBufferPercentage(result.bufferPercentage !== undefined ? result.bufferPercentage : 25);
-        setAutoPauseEnabled(result.autoPauseEnabled !== undefined ? result.autoPauseEnabled : true);
         setPreloadQuality(result.preloadQuality !== undefined ? result.preloadQuality : 'auto');
         
         addInfoLog('Settings loaded successfully');
@@ -192,7 +177,6 @@ const Index = () => {
       debugMode, 
       bufferTimeout,
       bufferPercentage,
-      autoPauseEnabled,
       preloadQuality
     };
     
@@ -206,7 +190,6 @@ const Index = () => {
           return;
         }
         
-        // Show toast notification
         toast.success("Settings saved successfully!", {
           description: "Your preferences have been updated",
           icon: <Check className="h-4 w-4" />
@@ -215,7 +198,6 @@ const Index = () => {
         setSettingsSaved(true);
         addSuccessLog('Settings saved successfully');
         
-        // Send settings to content scripts
         sendSettingsToActiveTab(settings);
       });
     } catch (err) {
@@ -227,7 +209,6 @@ const Index = () => {
     }
   };
 
-  // Send settings to active tabs to update in real-time
   const sendSettingsToActiveTab = (settings: any) => {
     if (!isExtensionEnvironment) return;
     
@@ -261,7 +242,6 @@ const Index = () => {
     });
   };
 
-  // If there was an error initializing the extension, show it
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
@@ -295,8 +275,6 @@ const Index = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in">
-        {/* Feature Cards */}
-        {/* Feature Card 1 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -307,11 +285,11 @@ const Index = () => {
           <CardContent>
             <p className="text-sm text-gray-600">
               Forces complete video buffering to prevent stuttering and provides smoother playback experience.
+            
             </p>
           </CardContent>
         </Card>
 
-        {/* Feature Card 2 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -326,7 +304,6 @@ const Index = () => {
           </CardContent>
         </Card>
 
-        {/* Feature Card 3 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -343,7 +320,6 @@ const Index = () => {
       </div>
 
       <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        {/* Main Settings Card */}
         <Card className="hover:shadow-lg transition-all duration-300">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -355,7 +331,6 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Basic Settings Section */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Basic Settings</h3>
               
@@ -408,7 +383,6 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Advanced Buffering Settings Section */}
             <div className="space-y-4 pt-2 border-t border-gray-100">
               <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider pt-2">Advanced Buffering</h3>
               
@@ -471,30 +445,6 @@ const Index = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-2">
-                        <Label htmlFor="autopause-toggle" className="text-base font-medium group-hover:text-primary transition-colors">
-                          Auto-Pause on Low Buffer
-                        </Label>
-                        <Info className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <p>Automatically pause video when buffer runs low</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <Switch
-                  id="autopause-toggle"
-                  checked={autoPauseEnabled}
-                  onCheckedChange={setAutoPauseEnabled}
-                  className="data-[state=checked]:bg-primary"
-                />
-              </div>
-              
-              <div className="flex items-center justify-between group">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2">
                         <Label htmlFor="quality-select" className="text-base font-medium group-hover:text-primary transition-colors">
                           Preload Quality
                         </Label>
@@ -530,7 +480,6 @@ const Index = () => {
           </CardFooter>
         </Card>
 
-        {/* Console Logs Card */}
         <Card className="hover:shadow-lg transition-all duration-300">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -593,7 +542,6 @@ const Index = () => {
         </Card>
       </div>
 
-      {/* How It Works Section */}
       <Card className="w-full max-w-4xl mb-8 hover:shadow-lg transition-all duration-300">
         <CardHeader>
           <CardTitle className="text-xl">How YTBuffer Works</CardTitle>
@@ -622,7 +570,6 @@ const Index = () => {
         </CardContent>
       </Card>
 
-      {/* Footer */}
       <footer className="text-center mt-auto pt-6 pb-4 animate-fade-in">
         <p className="text-gray-600 flex items-center justify-center gap-1 mb-2">
           Made with love by <a href="https://twitter.com/anjumg70" className="text-primary hover:underline ml-1 hover:text-primary/80 transition-colors">@anjumg70</a>
