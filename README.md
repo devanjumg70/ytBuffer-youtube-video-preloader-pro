@@ -1,4 +1,3 @@
-
 # YTBuffer - YouTube Video Preloader Extension
 
 ## 🧠 Overview
@@ -54,13 +53,13 @@ YTBuffer uses a smart approach to enhance your YouTube viewing experience:
 1. Download or clone this repository:
 
    ```sh
-   git clone <YOUR_GIT_URL>
+   git clone [https://github.com/devanjumg70/ytBuffer-youtube-video-preloader-pro.git]
    ```
 
 2. Navigate to the project folder:
 
    ```sh
-   cd ytbuffer
+   cd \ytBuffer-youtube-video-preloader-pro-main
    ```
 
 3. Open Chrome and go to `chrome://extensions/`.
@@ -108,17 +107,6 @@ Click the extension icon to access settings:
 * **Tailwind CSS**
 * **shadcn/ui**
 * **Chrome Extension APIs**
-
----
-
-## 🌐 Deployment
-
-The extension can be packaged for distribution:
-
-1. Build the extension with `npm run build`.
-2. The resulting files can be uploaded to the Chrome Web Store or used directly.
-
-For development purposes, you can open [Lovable](https://lovable.dev/projects/26360616-c553-4938-a8fd-d125185732f7) and click **Share → Publish** to deploy for testing.
 
 ---
 
@@ -178,3 +166,5 @@ This project is licensed under the **MIT License**.
 * Made for users who value uninterrupted viewing experiences.
 
 ---
+
+Made with ❤️ by @anjumg70 / @devanjumg70 for uninterrupted viewing experiences
