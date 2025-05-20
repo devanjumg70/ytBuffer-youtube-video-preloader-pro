@@ -15,6 +15,9 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Check if we're in a browser extension environment
+const isExtensionEnvironment = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage;
+
 const Index = () => {
   const [isEnabled, setIsEnabled] = React.useState(true);
   const [debugMode, setDebugMode] = React.useState(false);
@@ -40,7 +43,7 @@ const Index = () => {
     };
 
     // Add listener for messages from content script
-    if (chrome && chrome.runtime) {
+    if (isExtensionEnvironment) {
       chrome.runtime.onMessage.addListener(handleMessage);
     } else {
       // For development outside of extension context
@@ -72,7 +75,7 @@ const Index = () => {
     }
 
     return () => {
-      if (chrome && chrome.runtime) {
+      if (isExtensionEnvironment) {
         chrome.runtime.onMessage.removeListener(handleMessage);
       }
     };
