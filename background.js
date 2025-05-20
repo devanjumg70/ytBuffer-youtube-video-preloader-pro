@@ -1,4 +1,3 @@
-
 /**
  * YouTube Force Buffer - Background Script
  * Handles communication with content script and maintains extension state
@@ -77,6 +76,13 @@ const loadSettings = () => {
   }
 };
 
+// Handle extension icon click
+chrome.action.onClicked.addListener(() => {
+  chrome.tabs.create({
+    url: 'index.html'
+  });
+});
+
 // Initialize the extension
 logWithTime('Extension initialized');
 loadSettings();
@@ -95,6 +101,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.runtime.sendMessage(message).catch(() => {
         // Popup might not be open, ignore the error
       });
+      
+      // Always send a response
+      sendResponse({ received: true });
+      return true;
     }
     
     else if (message.type === 'LOADING_FIX') {
@@ -104,6 +114,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.runtime.sendMessage(message).catch(() => {
         // Popup might not be open, ignore the error
       });
+      
+      sendResponse({ received: true });
+      return true;
     }
     
     else if (message.type === 'LOG_MESSAGE') {
@@ -113,6 +126,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.runtime.sendMessage(message).catch(() => {
         // Popup might not be open, ignore the error
       });
+      
+      sendResponse({ received: true });
+      return true;
     }
     
     else if (message.type === 'GET_SETTINGS') {
@@ -126,6 +142,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           handleError(error, 'sending settings to tab');
         });
       }
+      
+      sendResponse({ received: true });
+      return true;
     }
     
     else if (message.type === 'UPDATE_SETTINGS') {
@@ -145,6 +164,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           handleError(error, `sending settings to tab ${tabId}`);
         });
       });
+      
+      sendResponse({ received: true });
+      return true;
     }
   } catch (error) {
     handleError(error, 'processing message');
