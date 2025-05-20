@@ -1,4 +1,3 @@
-
 /**
  * YouTube Force Buffer - Content Script
  * Forces complete video buffering on YouTube videos and fixes stuck loading videos
@@ -628,7 +627,7 @@
       // Update config with new settings
       if (settings.isEnabled !== undefined) config.isEnabled = settings.isEnabled;
       if (settings.debugMode !== undefined) config.debugMode = settings.debugMode;
-      if (settings.loadingTimeoutSecs !== undefined) config.loadingTimeoutSecs = settings.bufferTimeout;
+      if (settings.bufferTimeout !== undefined) config.loadingTimeoutSecs = settings.bufferTimeout;
       if (settings.bufferPercentage !== undefined) config.bufferPercentage = settings.bufferPercentage;
       if (settings.autoPauseEnabled !== undefined) config.autoPauseEnabled = settings.autoPauseEnabled;
       

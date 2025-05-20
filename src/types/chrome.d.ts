@@ -7,7 +7,7 @@ declare namespace chrome {
   namespace runtime {
     function sendMessage(message: any): Promise<any>;
     const onMessage: {
-      addListener(callback: (message: any, sender: any, sendResponse: any) => void): void;
+      addListener(callback: (message: any, sender: any, sendResponse: any) => void | boolean): void;
       removeListener(callback: (message: any, sender: any, sendResponse: any) => void): void;
     };
     const lastError: {
@@ -49,7 +49,6 @@ declare namespace chrome {
     
     function query(queryInfo: { active?: boolean; currentWindow?: boolean; }, callback: (result: Tab[]) => void): void;
     function sendMessage(tabId: number, message: any): Promise<any>;
-    function onUpdated(tabId: number, changeInfo: { status?: string; url?: string; }, tab: Tab): void;
     
     const onUpdated: {
       addListener(callback: (tabId: number, changeInfo: { status?: string; url?: string; }, tab: Tab) => void): void;
