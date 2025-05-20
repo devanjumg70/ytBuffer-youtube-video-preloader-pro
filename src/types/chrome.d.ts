@@ -3,7 +3,7 @@
 declare namespace chrome {
   namespace runtime {
     function sendMessage(message: any): Promise<any>;
-    function onMessage: {
+    const onMessage: {
       addListener(callback: (message: any, sender: any, sendResponse: any) => void): void;
       removeListener(callback: (message: any, sender: any, sendResponse: any) => void): void;
     };
