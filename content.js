@@ -1,3 +1,4 @@
+
 /**
  * YouTube Force Buffer - Content Script
  * Forces complete video buffering on YouTube videos and fixes stuck loading videos
@@ -6,7 +7,7 @@
 (function() {
   'use strict';
   
-  // Configuration
+  // Configuration - will be updated from extension settings
   const config = {
     checkInterval: 1000,         // How often to check video buffer status (ms)
     seekStepSize: 30,            // How far to seek ahead when forcing buffer (seconds)
@@ -14,7 +15,10 @@
     debugMode: true,             // Enable console logging for debugging
     loadingTimeoutSecs: 10,      // Time (seconds) to wait before considering a video stuck in loading
     loadingFixAttempts: 3,       // Number of attempts to fix a stuck loading video
-    loadingFixDelay: 1500        // Delay between loading fix attempts (ms)
+    loadingFixDelay: 1500,       // Delay between loading fix attempts (ms)
+    isEnabled: true,             // Extension enabled state
+    bufferPercentage: 25,        // Percentage of video to buffer before playing
+    autoPauseEnabled: true       // Whether to auto-pause when buffer runs low
   };
   
   let videoElement = null;
@@ -27,6 +31,9 @@
   let loadingFixAttempts = 0;
   let lastProgressTime = 0;
   let isStuckInLoading = false;
+  let monitoringActive = false;
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 5;
   
   /**
    * Debug logger that only logs when debug mode is enabled
@@ -43,9 +50,11 @@
             message: args.join(' '),
             logType: 'info'
           }
+        }).catch(e => {
+          reconnectToExtension();
         });
       } catch (e) {
-        // Ignore errors from disconnected port
+        reconnectToExtension();
       }
     }
   };
@@ -65,9 +74,11 @@
             message: args.join(' '),
             logType: 'warning'
           }
+        }).catch(e => {
+          reconnectToExtension();
         });
       } catch (e) {
-        // Ignore errors from disconnected port
+        reconnectToExtension();
       }
     }
   };
@@ -87,9 +98,11 @@
             message: args.join(' '),
             logType: 'error'
           }
+        }).catch(e => {
+          reconnectToExtension();
         });
       } catch (e) {
-        // Ignore errors from disconnected port
+        reconnectToExtension();
       }
     }
   };
@@ -109,11 +122,43 @@
             message: args.join(' '),
             logType: 'success'
           }
+        }).catch(e => {
+          reconnectToExtension();
         });
       } catch (e) {
-        // Ignore errors from disconnected port
+        reconnectToExtension();
       }
     }
+  };
+  
+  /**
+   * Attempts to reconnect to the extension when messaging fails
+   */
+  const reconnectToExtension = () => {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.error('[YT Force Buffer] Max reconnection attempts reached. Please refresh the page.');
+      return;
+    }
+    
+    reconnectAttempts++;
+    console.warn(`[YT Force Buffer] Connection to extension lost. Reconnection attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+    
+    // Try to get settings to test connection
+    setTimeout(() => {
+      try {
+        chrome.runtime.sendMessage({
+          type: 'GET_SETTINGS',
+          data: {}
+        }).then(() => {
+          console.log('[YT Force Buffer] Reconnected to extension');
+          reconnectAttempts = 0;
+        }).catch(e => {
+          // Still not connected
+        });
+      } catch (e) {
+        // Still not connected
+      }
+    }, 2000 * reconnectAttempts); // Exponential backoff
   };
   
   /**
@@ -172,6 +217,20 @@
   };
   
   /**
+   * Calculates the current buffer percentage
+   * @param {HTMLVideoElement} video - The video element
+   * @returns {number} - Buffer percentage (0-100)
+   */
+  const getBufferPercentage = (video) => {
+    if (!video || !video.buffered || video.buffered.length === 0 || !isFinite(video.duration)) {
+      return 0;
+    }
+    
+    const furthestBuffered = getFurthestBufferedTime(video);
+    return Math.round((furthestBuffered / video.duration) * 100);
+  };
+  
+  /**
    * Detects if a video is stuck in the loading state
    * @param {HTMLVideoElement} video - The video element to check
    * @returns {boolean} - Whether the video is stuck in loading
@@ -205,6 +264,19 @@
     }
     
     warningLog(`Attempting to fix stuck loading video (attempt ${loadingFixAttempts + 1}/${config.loadingFixAttempts})`);
+    
+    // Notify background about fix attempt
+    try {
+      chrome.runtime.sendMessage({
+        type: 'LOADING_FIX',
+        data: {
+          attempt: loadingFixAttempts + 1,
+          max: config.loadingFixAttempts
+        }
+      });
+    } catch (error) {
+      console.error('Error sending loading fix message:', error);
+    }
     
     // Try different techniques to unstick the video
     try {
@@ -248,7 +320,7 @@
         }, config.loadingFixDelay);
       }
     } catch (error) {
-      debugLog('Error while trying to fix stuck loading:', error);
+      errorLog('Error while trying to fix stuck loading:', error);
     }
     
     // If we make the final attempt, add an error log
@@ -262,22 +334,26 @@
    * @returns {Object|null} - YouTube player API object or null if not found
    */
   const findYouTubePlayer = () => {
-    // Try to find YouTube's API from the window object
-    if (window.ytplayer && window.ytplayer.config) {
-      return window.ytplayer.config.player;
-    }
-    
-    // Try to find YouTube's player from the video element
-    const videoElement = document.querySelector('video');
-    if (videoElement) {
-      // Look up the DOM tree to find YouTube player
-      let element = videoElement;
-      while (element && element !== document.body) {
-        if (element.id === 'movie_player' || element.classList.contains('html5-video-player')) {
-          return element;
-        }
-        element = element.parentElement;
+    try {
+      // Try to find YouTube's API from the window object
+      if (window.ytplayer && window.ytplayer.config) {
+        return window.ytplayer.config.player;
       }
+      
+      // Try to find YouTube's player from the video element
+      const videoElement = document.querySelector('video');
+      if (videoElement) {
+        // Look up the DOM tree to find YouTube player
+        let element = videoElement;
+        while (element && element !== document.body) {
+          if (element.id === 'movie_player' || element.classList.contains('html5-video-player')) {
+            return element;
+          }
+          element = element.parentElement;
+        }
+      }
+    } catch (error) {
+      errorLog('Error finding YouTube player:', error);
     }
     
     return null;
@@ -287,7 +363,10 @@
    * Forces video buffering by manipulating the playback speed and using seeking
    */
   const forceBuffering = () => {
-    if (!videoElement || isVideoFullyBuffered(videoElement) || seekAttempts >= config.maxSeekAttempts) {
+    if (!videoElement || 
+        !config.isEnabled || 
+        isVideoFullyBuffered(videoElement) || 
+        seekAttempts >= config.maxSeekAttempts) {
       stopBuffering();
       return;
     }
@@ -304,26 +383,43 @@
       }
       
       debugLog("Started buffer forcing");
+      
+      // Notify about buffering start
+      try {
+        chrome.runtime.sendMessage({
+          type: 'BUFFER_STATUS',
+          data: { status: 'started' }
+        });
+      } catch (error) {
+        console.error('Error sending buffer status message:', error);
+      }
     }
     
-    const duration = videoElement.duration;
-    const furthestBufferedTime = getFurthestBufferedTime(videoElement);
-    const remainingTime = duration - furthestBufferedTime;
-    
-    debugLog(`Buffering: ${Math.round(furthestBufferedTime)}s / ${Math.round(duration)}s (${Math.round((furthestBufferedTime/duration)*100)}%)`);
-    
-    // If we have less than 1 second remaining or have reached max attempts, we're done
-    if (remainingTime <= 1 || seekAttempts >= config.maxSeekAttempts) {
-      successLog('Buffering complete or max attempts reached');
-      stopBuffering();
-      return;
-    }
-    
-    // Calculate next seek position
-    const nextSeekPosition = Math.min(furthestBufferedTime + config.seekStepSize, duration - 0.1);
-    
-    // Advanced handling for DASH format
     try {
+      const duration = videoElement.duration;
+      const furthestBufferedTime = getFurthestBufferedTime(videoElement);
+      const remainingTime = duration - furthestBufferedTime;
+      const bufferPercentage = getBufferPercentage(videoElement);
+      
+      // Log buffer progress
+      debugLog(`Buffering: ${Math.round(furthestBufferedTime)}s / ${Math.round(duration)}s (${bufferPercentage}%)`);
+      
+      // Calculate target buffer based on settings
+      const targetBufferPercentage = config.bufferPercentage;
+      const isBufferEnough = bufferPercentage >= targetBufferPercentage;
+      
+      // If we have reached our target buffer percentage or have less than 1 second 
+      // remaining or have reached max attempts, we're done
+      if (isBufferEnough || remainingTime <= 1 || seekAttempts >= config.maxSeekAttempts) {
+        successLog(`Buffering complete: ${bufferPercentage}% buffered (target: ${targetBufferPercentage}%)`);
+        stopBuffering();
+        return;
+      }
+      
+      // Calculate next seek position
+      const nextSeekPosition = Math.min(furthestBufferedTime + config.seekStepSize, duration - 0.1);
+      
+      // Advanced handling for DASH format
       // Store current position
       const currentPosition = videoElement.currentTime;
       
@@ -337,7 +433,7 @@
         seekAttempts++;
       }, 150);
     } catch (error) {
-      debugLog('Error during seek:', error);
+      errorLog('Error during seek:', error);
       stopBuffering();
     }
   };
@@ -352,69 +448,88 @@
     
     debugLog('Stopping buffer forcing');
     
-    // Restore original state
-    if (videoElement) {
-      videoElement.currentTime = originalPlaybackTime;
-      videoElement.playbackRate = originalPlaybackRate;
-    }
-    
-    // Reset buffering state
-    isBuffering = false;
-    seekAttempts = 0;
-    
-    // Notify background script that buffering is complete
     try {
+      // Restore original state
+      if (videoElement) {
+        videoElement.currentTime = originalPlaybackTime;
+        videoElement.playbackRate = originalPlaybackRate;
+      }
+      
+      // Reset buffering state
+      isBuffering = false;
+      seekAttempts = 0;
+      
+      // Notify background script that buffering is complete
       chrome.runtime.sendMessage({
         type: 'BUFFER_STATUS',
         data: { status: 'complete' }
+      }).catch(error => {
+        console.error('Error sending buffer complete message:', error);
       });
-    } catch (error) {
-      // Ignore errors from disconnected port
-    }
-    
-    // Add success log when we finish buffering
-    if (isBuffering) {
+      
+      // Add success log when we finish buffering
       successLog('Buffering finished');
+    } catch (error) {
+      errorLog('Error stopping buffer:', error);
     }
   };
   
   /**
    * Monitors the video for both buffering and loading issues
-   * @param {HTMLVideoElement} video - The video element to monitor
    */
   const monitorVideoState = () => {
-    if (!videoElement) return;
+    if (!videoElement || !config.isEnabled) return;
     
-    // Check if video is stuck in loading state
-    if (!isStuckInLoading && isVideoStuckInLoading(videoElement)) {
-      debugLog('Video appears to be stuck in loading state');
-      isStuckInLoading = true;
-      loadingFixAttempts = 0;
-      fixStuckLoadingVideo(videoElement);
-    }
-    
-    // If video is playing normally now, reset the loading detection
-    if (isStuckInLoading && videoElement.readyState >= 3 && videoElement.currentTime > 0.5) {
-      debugLog('Video recovered from loading state');
-      isStuckInLoading = false;
-      loadingFixAttempts = 0;
-      lastProgressTime = 0;
-      if (loadingFixTimer) {
-        clearTimeout(loadingFixTimer);
-        loadingFixTimer = null;
+    try {
+      // Check if video is stuck in loading state
+      if (!isStuckInLoading && isVideoStuckInLoading(videoElement)) {
+        debugLog('Video appears to be stuck in loading state');
+        isStuckInLoading = true;
+        loadingFixAttempts = 0;
+        fixStuckLoadingVideo(videoElement);
       }
-    }
-    
-    // Check if video needs buffer forcing
-    if (!isStuckInLoading && !isVideoFullyBuffered(videoElement)) {
-      forceBuffering();
-    } else if (isBuffering) {
-      stopBuffering();
-    }
-    
-    // Update lastProgressTime when the video makes progress
-    if (videoElement.readyState > 1 && videoElement.currentTime > 0) {
-      lastProgressTime = Date.now();
+      
+      // If video is playing normally now, reset the loading detection
+      if (isStuckInLoading && videoElement.readyState >= 3 && videoElement.currentTime > 0.5) {
+        debugLog('Video recovered from loading state');
+        isStuckInLoading = false;
+        loadingFixAttempts = 0;
+        lastProgressTime = 0;
+        if (loadingFixTimer) {
+          clearTimeout(loadingFixTimer);
+          loadingFixTimer = null;
+        }
+      }
+      
+      // Check if video needs buffer forcing
+      if (!isStuckInLoading) {
+        if (config.autoPauseEnabled) {
+          // If buffer percentage is below target and video is playing, consider pausing
+          const bufferPercentage = getBufferPercentage(videoElement);
+          const isBufferLow = bufferPercentage < config.bufferPercentage;
+          
+          if (isBufferLow && !videoElement.paused && !isBuffering) {
+            warningLog(`Buffer low (${bufferPercentage}%), forcing buffer`);
+            forceBuffering();
+          } else if (!isVideoFullyBuffered(videoElement) && !isBuffering) {
+            forceBuffering();
+          } else if (isBuffering) {
+            // Continue buffering process
+            forceBuffering();
+          }
+        } else if (!isVideoFullyBuffered(videoElement)) {
+          forceBuffering();
+        } else if (isBuffering) {
+          stopBuffering();
+        }
+      }
+      
+      // Update lastProgressTime when the video makes progress
+      if (videoElement.readyState > 1 && videoElement.currentTime > 0) {
+        lastProgressTime = Date.now();
+      }
+    } catch (error) {
+      errorLog('Error in video monitoring:', error);
     }
   };
   
@@ -422,64 +537,119 @@
    * Starts monitoring the video buffer
    */
   const startBufferMonitoring = (video) => {
-    if (!video || bufferCheckInterval) {
+    if (!video || bufferCheckInterval || !config.isEnabled) {
       return;
     }
     
     videoElement = video;
     debugLog('Starting video monitoring');
+    monitoringActive = true;
     
-    // Add event listeners to detect stalled/waiting states
-    video.addEventListener('waiting', () => {
-      debugLog('Video entered waiting state');
-      lastProgressTime = Date.now();
-    });
-    
-    video.addEventListener('playing', () => {
-      debugLog('Video started playing');
-      lastProgressTime = Date.now();
-    });
-    
-    video.addEventListener('stalled', () => {
-      debugLog('Video stalled');
-    });
-    
-    // Start the monitoring interval
-    bufferCheckInterval = setInterval(monitorVideoState, config.checkInterval);
+    try {
+      // Add event listeners to detect stalled/waiting states
+      video.addEventListener('waiting', () => {
+        debugLog('Video entered waiting state');
+        lastProgressTime = Date.now();
+      });
+      
+      video.addEventListener('playing', () => {
+        debugLog('Video started playing');
+        lastProgressTime = Date.now();
+      });
+      
+      video.addEventListener('stalled', () => {
+        debugLog('Video stalled');
+      });
+      
+      video.addEventListener('error', (e) => {
+        const errorCode = e.target.error ? e.target.error.code : 'unknown';
+        errorLog(`Video error: ${errorCode}`);
+      });
+      
+      // Start the monitoring interval
+      bufferCheckInterval = setInterval(monitorVideoState, config.checkInterval);
+      
+      // Get video info
+      const videoId = new URLSearchParams(window.location.search).get('v');
+      successLog(`Monitoring started for video ID: ${videoId || 'unknown'}`);
+      
+    } catch (error) {
+      errorLog('Error starting video monitoring:', error);
+    }
   };
   
   /**
    * Stops monitoring the video buffer
    */
   const stopBufferMonitoring = () => {
-    if (bufferCheckInterval) {
-      clearInterval(bufferCheckInterval);
-      bufferCheckInterval = null;
+    if (!monitoringActive) return;
+    
+    try {
+      if (bufferCheckInterval) {
+        clearInterval(bufferCheckInterval);
+        bufferCheckInterval = null;
+      }
+      
+      if (loadingFixTimer) {
+        clearTimeout(loadingFixTimer);
+        loadingFixTimer = null;
+      }
+      
+      if (isBuffering) {
+        stopBuffering();
+      }
+      
+      if (videoElement) {
+        // Remove event listeners
+        videoElement.removeEventListener('waiting', () => {});
+        videoElement.removeEventListener('playing', () => {});
+        videoElement.removeEventListener('stalled', () => {});
+        videoElement.removeEventListener('error', () => {});
+      }
+      
+      // Reset all state variables
+      videoElement = null;
+      isStuckInLoading = false;
+      loadingFixAttempts = 0;
+      lastProgressTime = 0;
+      monitoringActive = false;
+      
+      debugLog('Stopped video monitoring');
+    } catch (error) {
+      errorLog('Error stopping video monitoring:', error);
     }
-    
-    if (loadingFixTimer) {
-      clearTimeout(loadingFixTimer);
-      loadingFixTimer = null;
+  };
+  
+  /**
+   * Handles settings updates from the extension
+   */
+  const handleSettingsUpdate = (settings) => {
+    try {
+      // Update config with new settings
+      if (settings.isEnabled !== undefined) config.isEnabled = settings.isEnabled;
+      if (settings.debugMode !== undefined) config.debugMode = settings.debugMode;
+      if (settings.loadingTimeoutSecs !== undefined) config.loadingTimeoutSecs = settings.bufferTimeout;
+      if (settings.bufferPercentage !== undefined) config.bufferPercentage = settings.bufferPercentage;
+      if (settings.autoPauseEnabled !== undefined) config.autoPauseEnabled = settings.autoPauseEnabled;
+      
+      debugLog(`Settings updated: enabled=${config.isEnabled}, debug=${config.debugMode}, buffer=${config.bufferPercentage}%`);
+      
+      // If extension was disabled, stop monitoring
+      if (!config.isEnabled && monitoringActive) {
+        stopBufferMonitoring();
+        debugLog('Extension disabled, monitoring stopped');
+      }
+      // If extension was enabled and we're on a video page, start monitoring
+      else if (config.isEnabled && !monitoringActive && window.location.href.includes('youtube.com/watch')) {
+        const video = document.querySelector('video');
+        if (video) {
+          startBufferMonitoring(video);
+          debugLog('Extension enabled, monitoring started');
+        }
+      }
+    } catch (error) {
+      errorLog('Error handling settings update:', error);
     }
-    
-    if (isBuffering) {
-      stopBuffering();
-    }
-    
-    if (videoElement) {
-      // Remove event listeners
-      videoElement.removeEventListener('waiting', () => {});
-      videoElement.removeEventListener('playing', () => {});
-      videoElement.removeEventListener('stalled', () => {});
-    }
-    
-    // Reset all state variables
-    videoElement = null;
-    isStuckInLoading = false;
-    loadingFixAttempts = 0;
-    lastProgressTime = 0;
-    
-    debugLog('Stopped video monitoring');
   };
   
   /**
@@ -488,80 +658,108 @@
   const setupVideoObserver = () => {
     debugLog('Setting up video observer');
     
-    // First, check if there's already a video element
-    const existingVideo = document.querySelector('video');
-    if (existingVideo) {
-      startBufferMonitoring(existingVideo);
-    }
-    
-    // Set up mutation observer to detect when videos are added or changed
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        // Check for added nodes
-        if (mutation.addedNodes.length > 0) {
-          mutation.addedNodes.forEach((node) => {
-            // Direct video element
-            if (node.nodeName === 'VIDEO') {
-              startBufferMonitoring(node);
+    try {
+      // First, check if there's already a video element
+      const existingVideo = document.querySelector('video');
+      if (existingVideo && config.isEnabled) {
+        startBufferMonitoring(existingVideo);
+      }
+      
+      // Set up mutation observer to detect when videos are added or changed
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          try {
+            // Check for added nodes
+            if (mutation.addedNodes.length > 0 && config.isEnabled) {
+              mutation.addedNodes.forEach((node) => {
+                // Direct video element
+                if (node.nodeName === 'VIDEO') {
+                  startBufferMonitoring(node);
+                }
+                // Video element within added DOM tree
+                else if (node.querySelector) {
+                  const video = node.querySelector('video');
+                  if (video) {
+                    startBufferMonitoring(video);
+                  }
+                }
+              });
             }
-            // Video element within added DOM tree
-            else if (node.querySelector) {
-              const video = node.querySelector('video');
-              if (video) {
-                startBufferMonitoring(video);
-              }
+            
+            // Check if our monitored video was removed
+            if (videoElement && mutation.removedNodes.length > 0) {
+              mutation.removedNodes.forEach((node) => {
+                if (node === videoElement || (node.contains && node.contains(videoElement))) {
+                  stopBufferMonitoring();
+                }
+              });
             }
-          });
-        }
-        
-        // Check if our monitored video was removed
-        if (videoElement && mutation.removedNodes.length > 0) {
-          mutation.removedNodes.forEach((node) => {
-            if (node === videoElement || (node.contains && node.contains(videoElement))) {
-              stopBufferMonitoring();
-            }
-          });
-        }
+          } catch (error) {
+            errorLog('Error in mutation observer:', error);
+          }
+        });
       });
-    });
-    
-    // Start observing the document
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Return the observer so it can be disconnected if needed
-    return observer;
+      
+      // Start observing the document
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+      
+      // Return the observer so it can be disconnected if needed
+      return observer;
+    } catch (error) {
+      errorLog('Error setting up video observer:', error);
+      return null;
+    }
   };
   
   /**
    * Initializes the extension
    */
   const initialize = () => {
-    debugLog('Initializing YouTube Force Buffer');
-    
-    // Only run on YouTube video pages
-    if (!window.location.href.includes('youtube.com/watch')) {
-      return;
-    }
-    
-    // Log the YouTube video ID
-    const urlParams = new URLSearchParams(window.location.search);
-    const videoId = urlParams.get('v');
-    debugLog(`Monitoring YouTube video ID: ${videoId}`);
-    
-    // Set up video element observer
-    const observer = setupVideoObserver();
-    
-    // Clean up when navigating away
-    window.addEventListener('beforeunload', () => {
-      debugLog('Page unloading, cleaning up');
-      stopBufferMonitoring();
-      if (observer) {
-        observer.disconnect();
+    try {
+      debugLog('Initializing YouTube Force Buffer');
+      
+      // Only run on YouTube video pages
+      if (!window.location.href.includes('youtube.com/watch')) {
+        return;
       }
-    });
+      
+      // Log the YouTube video ID
+      const urlParams = new URLSearchParams(window.location.search);
+      const videoId = urlParams.get('v');
+      debugLog(`YouTube video ID detected: ${videoId}`);
+      
+      // Request settings from background script
+      chrome.runtime.sendMessage({
+        type: 'GET_SETTINGS',
+        data: {}
+      }).catch(error => {
+        console.error('Error requesting settings:', error);
+      });
+      
+      // Listen for messages from the extension
+      chrome.runtime.onMessage.addListener((message) => {
+        if (message.type === 'SETTINGS_UPDATE') {
+          handleSettingsUpdate(message.data);
+        }
+      });
+      
+      // Set up video element observer
+      const observer = setupVideoObserver();
+      
+      // Clean up when navigating away
+      window.addEventListener('beforeunload', () => {
+        debugLog('Page unloading, cleaning up');
+        stopBufferMonitoring();
+        if (observer) {
+          observer.disconnect();
+        }
+      });
+    } catch (error) {
+      errorLog('Error initializing extension:', error);
+    }
   };
   
   // Start the extension

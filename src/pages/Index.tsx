@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Github, Twitter, Info, Check, CirclePercent, SlidersHorizontal, ToggleRight, FileText } from "lucide-react";
+import { Github, Twitter, Info, Check, CirclePercent, SlidersHorizontal, ToggleRight, FileText, AlertTriangle } from "lucide-react";
 import { 
   Tooltip,
   TooltipContent,
@@ -16,88 +16,242 @@ import { toast } from "@/components/ui/sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Check if we're in a browser extension environment
-const isExtensionEnvironment = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage;
+const isExtensionEnvironment = typeof chrome !== 'undefined' && 
+                              chrome.runtime && 
+                              chrome.runtime.sendMessage;
+
+// Define log type for TypeScript
+interface ConsoleLog {
+  time: string;
+  message: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+}
 
 const Index = () => {
-  const [isEnabled, setIsEnabled] = React.useState(true);
-  const [debugMode, setDebugMode] = React.useState(false);
-  const [bufferTimeout, setBufferTimeout] = React.useState(10);
-  const [bufferPercentage, setBufferPercentage] = React.useState(25);
-  const [autoPauseEnabled, setAutoPauseEnabled] = React.useState(true);
-  const [preloadQuality, setPreloadQuality] = React.useState('auto');
-  const [consoleLogs, setConsoleLogs] = useState<Array<{time: string, message: string, type: 'info' | 'warning' | 'error' | 'success'}>>([]);
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [debugMode, setDebugMode] = useState(true);
+  const [bufferTimeout, setBufferTimeout] = useState(10);
+  const [bufferPercentage, setBufferPercentage] = useState(25);
+  const [autoPauseEnabled, setAutoPauseEnabled] = useState(true);
+  const [preloadQuality, setPreloadQuality] = useState('auto');
+  const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Function to handle messages from content scripts
-    const handleMessage = (message) => {
-      if (message.type === 'LOG_MESSAGE') {
-        setConsoleLogs(logs => [
-          ...logs, 
-          {
-            time: new Date().toLocaleTimeString(),
-            message: message.data.message,
-            type: message.data.logType || 'info'
+    const handleMessage = (message: any) => {
+      try {
+        if (message.type === 'LOG_MESSAGE') {
+          setConsoleLogs(logs => [
+            ...logs, 
+            {
+              time: new Date().toLocaleTimeString(),
+              message: message.data.message,
+              type: message.data.logType || 'info'
+            }
+          ]);
+        } else if (message.type === 'BUFFER_STATUS') {
+          const status = message.data.status;
+          if (status === 'complete') {
+            addSuccessLog(`Buffering complete for video`);
+          } else if (status === 'started') {
+            addInfoLog(`Buffering started for video`);
           }
-        ]);
+        } else if (message.type === 'LOADING_FIX') {
+          const attempt = message.data.attempt;
+          const max = message.data.max;
+          addWarningLog(`Loading fix attempt ${attempt} of ${max}`);
+        }
+      } catch (err) {
+        setError(`Error processing message: ${err instanceof Error ? err.message : String(err)}`);
+        console.error('Error handling message:', err);
       }
     };
 
     // Add listener for messages from content script
     if (isExtensionEnvironment) {
-      chrome.runtime.onMessage.addListener(handleMessage);
+      try {
+        chrome.runtime.onMessage.addListener(handleMessage);
+        
+        // Initial loading of settings
+        loadSettings();
+
+        // Add a welcome message
+        addInfoLog('Extension initialized and ready');
+      } catch (err) {
+        console.error('Failed to set up Chrome message listener:', err);
+        setError(`Extension error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } else {
-      // For development outside of extension context
-      // Add some dummy logs for demonstration
-      const dummyLogs = [
-        { message: 'Extension initialized', type: 'info' },
-        { message: 'YouTube video detected', type: 'info' },
-        { message: 'Starting buffer monitoring', type: 'info' },
-        { message: 'Current buffer: 15%', type: 'info' },
-        { message: 'Video stalled, applying fix', type: 'warning' },
-        { message: 'Buffer recovery successful', type: 'success' }
-      ];
-      
-      const interval = setInterval(() => {
-        if (dummyLogs.length > 0) {
-          const log = dummyLogs.shift();
-          setConsoleLogs(logs => [
-            ...logs,
-            {
-              time: new Date().toLocaleTimeString(),
-              message: log.message,
-              type: log.type as 'info' | 'warning' | 'error' | 'success'
-            }
-          ]);
-        } else {
-          clearInterval(interval);
-        }
-      }, 2000);
+      // Development mode: Add initial log
+      addInfoLog('Running in development mode. Connect to YouTube to see actual logs.');
     }
 
     return () => {
       if (isExtensionEnvironment) {
-        chrome.runtime.onMessage.removeListener(handleMessage);
+        try {
+          chrome.runtime.onMessage.removeListener(handleMessage);
+        } catch (err) {
+          console.error('Failed to remove message listener:', err);
+        }
       }
     };
   }, []);
 
+  // Helper functions to add typed logs
+  const addInfoLog = (message: string) => {
+    setConsoleLogs(logs => [
+      ...logs,
+      {
+        time: new Date().toLocaleTimeString(),
+        message,
+        type: 'info'
+      }
+    ]);
+  };
+
+  const addWarningLog = (message: string) => {
+    setConsoleLogs(logs => [
+      ...logs,
+      {
+        time: new Date().toLocaleTimeString(),
+        message,
+        type: 'warning'
+      }
+    ]);
+  };
+
+  const addErrorLog = (message: string) => {
+    setConsoleLogs(logs => [
+      ...logs,
+      {
+        time: new Date().toLocaleTimeString(),
+        message,
+        type: 'error'
+      }
+    ]);
+  };
+
+  const addSuccessLog = (message: string) => {
+    setConsoleLogs(logs => [
+      ...logs,
+      {
+        time: new Date().toLocaleTimeString(),
+        message,
+        type: 'success'
+      }
+    ]);
+  };
+
+  // Load settings from Chrome storage
+  const loadSettings = () => {
+    if (!isExtensionEnvironment) return;
+    
+    try {
+      chrome.storage.sync.get([
+        'isEnabled', 
+        'debugMode', 
+        'bufferTimeout', 
+        'bufferPercentage',
+        'autoPauseEnabled',
+        'preloadQuality'
+      ], (result) => {
+        if (chrome.runtime.lastError) {
+          addErrorLog(`Failed to load settings: ${chrome.runtime.lastError.message}`);
+          return;
+        }
+        
+        // Update state with saved settings or keep defaults
+        setIsEnabled(result.isEnabled !== undefined ? result.isEnabled : true);
+        setDebugMode(result.debugMode !== undefined ? result.debugMode : true);
+        setBufferTimeout(result.bufferTimeout !== undefined ? result.bufferTimeout : 10);
+        setBufferPercentage(result.bufferPercentage !== undefined ? result.bufferPercentage : 25);
+        setAutoPauseEnabled(result.autoPauseEnabled !== undefined ? result.autoPauseEnabled : true);
+        setPreloadQuality(result.preloadQuality !== undefined ? result.preloadQuality : 'auto');
+        
+        addInfoLog('Settings loaded successfully');
+      });
+    } catch (err) {
+      console.error('Error loading settings:', err);
+      addErrorLog(`Failed to load settings: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const handleSave = () => {
-    // In a real implementation, this would save to chrome.storage
-    // and communicate with the content script
-    console.log('Settings saved:', { 
+    if (!isExtensionEnvironment) {
+      toast.warning("Running in development mode. Settings cannot be saved.", {
+        description: "Connect to a real Chrome extension to save settings",
+        icon: <AlertTriangle className="h-4 w-4" />
+      });
+      return;
+    }
+    
+    const settings = { 
       isEnabled, 
       debugMode, 
       bufferTimeout,
       bufferPercentage,
       autoPauseEnabled,
       preloadQuality
-    });
+    };
     
-    // Show toast notification instead of alert
-    toast.success("Settings saved successfully!", {
-      description: "Your preferences have been updated",
-      icon: <Check className="h-4 w-4" />
-    });
+    try {
+      chrome.storage.sync.set(settings, () => {
+        if (chrome.runtime.lastError) {
+          toast.error(`Failed to save settings: ${chrome.runtime.lastError.message}`, {
+            icon: <AlertTriangle className="h-4 w-4" />
+          });
+          addErrorLog(`Save failed: ${chrome.runtime.lastError.message}`);
+          return;
+        }
+        
+        // Show toast notification
+        toast.success("Settings saved successfully!", {
+          description: "Your preferences have been updated",
+          icon: <Check className="h-4 w-4" />
+        });
+        
+        setSettingsSaved(true);
+        addSuccessLog('Settings saved successfully');
+        
+        // Send settings to content scripts
+        sendSettingsToActiveTab(settings);
+      });
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      toast.error(`Error saving settings: ${err instanceof Error ? err.message : String(err)}`, {
+        icon: <AlertTriangle className="h-4 w-4" />
+      });
+      addErrorLog(`Error saving settings: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  // Send settings to active tabs to update in real-time
+  const sendSettingsToActiveTab = (settings: any) => {
+    if (!isExtensionEnvironment) return;
+    
+    try {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error querying tabs:', chrome.runtime.lastError);
+          return;
+        }
+        
+        tabs.forEach(tab => {
+          if (tab.id && tab.url?.includes('youtube.com')) {
+            chrome.tabs.sendMessage(tab.id, {
+              type: 'UPDATE_SETTINGS',
+              data: settings
+            }).catch(err => {
+              console.error('Error sending message to tab:', err);
+            });
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Error sending settings to tabs:', err);
+    }
   };
 
   const clearLogs = () => {
@@ -107,9 +261,41 @@ const Index = () => {
     });
   };
 
+  // If there was an error initializing the extension, show it
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Extension Error
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{error}</p>
+            <p className="mt-4 text-sm text-gray-500">
+              Try reloading the extension or check the browser console for more information.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => window.location.reload()}
+            >
+              Reload Extension
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in">
+        {/* Feature Cards */}
         {/* Feature Card 1 */}
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
           <CardHeader className="pb-2">
@@ -339,7 +525,7 @@ const Index = () => {
               className="w-full hover:bg-primary/90 transition-colors" 
               onClick={handleSave}
             >
-              Save Settings
+              {settingsSaved ? "Settings Saved" : "Save Settings"}
             </Button>
           </CardFooter>
         </Card>
@@ -399,6 +585,7 @@ const Index = () => {
               variant="outline"
               className="w-full hover:bg-gray-100 transition-colors" 
               onClick={clearLogs}
+              disabled={consoleLogs.length === 0}
             >
               Clear Logs
             </Button>
