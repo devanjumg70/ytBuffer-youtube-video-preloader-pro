@@ -1,4 +1,3 @@
-
 /**
  * YouTube Force Buffer - Content Script
  * Forces complete video buffering on YouTube videos and fixes stuck loading videos
@@ -35,6 +34,85 @@
   const debugLog = (...args) => {
     if (config.debugMode) {
       console.log('[YT Force Buffer]', ...args);
+      
+      // Send log to extension page
+      try {
+        chrome.runtime.sendMessage({
+          type: 'LOG_MESSAGE',
+          data: { 
+            message: args.join(' '),
+            logType: 'info'
+          }
+        });
+      } catch (e) {
+        // Ignore errors from disconnected port
+      }
+    }
+  };
+  
+  /**
+   * Helper function to send warning logs
+   */
+  const warningLog = (...args) => {
+    if (config.debugMode) {
+      console.warn('[YT Force Buffer]', ...args);
+      
+      // Send log to extension page
+      try {
+        chrome.runtime.sendMessage({
+          type: 'LOG_MESSAGE',
+          data: { 
+            message: args.join(' '),
+            logType: 'warning'
+          }
+        });
+      } catch (e) {
+        // Ignore errors from disconnected port
+      }
+    }
+  };
+  
+  /**
+   * Helper function to send error logs
+   */
+  const errorLog = (...args) => {
+    if (config.debugMode) {
+      console.error('[YT Force Buffer]', ...args);
+      
+      // Send log to extension page
+      try {
+        chrome.runtime.sendMessage({
+          type: 'LOG_MESSAGE',
+          data: { 
+            message: args.join(' '),
+            logType: 'error'
+          }
+        });
+      } catch (e) {
+        // Ignore errors from disconnected port
+      }
+    }
+  };
+  
+  /**
+   * Helper function to send success logs
+   */
+  const successLog = (...args) => {
+    if (config.debugMode) {
+      console.log('[YT Force Buffer SUCCESS]', ...args);
+      
+      // Send log to extension page
+      try {
+        chrome.runtime.sendMessage({
+          type: 'LOG_MESSAGE',
+          data: { 
+            message: args.join(' '),
+            logType: 'success'
+          }
+        });
+      } catch (e) {
+        // Ignore errors from disconnected port
+      }
     }
   };
   
@@ -126,7 +204,7 @@
       return;
     }
     
-    debugLog(`Attempting to fix stuck loading video (attempt ${loadingFixAttempts + 1}/${config.loadingFixAttempts})`);
+    warningLog(`Attempting to fix stuck loading video (attempt ${loadingFixAttempts + 1}/${config.loadingFixAttempts})`);
     
     // Try different techniques to unstick the video
     try {
@@ -171,6 +249,11 @@
       }
     } catch (error) {
       debugLog('Error while trying to fix stuck loading:', error);
+    }
+    
+    // If we make the final attempt, add an error log
+    if (loadingFixAttempts >= config.loadingFixAttempts) {
+      errorLog('All fix attempts failed. The video may be experiencing network issues.');
     }
   };
   
@@ -219,6 +302,8 @@
       if (!videoElement.paused) {
         videoElement.pause();
       }
+      
+      debugLog("Started buffer forcing");
     }
     
     const duration = videoElement.duration;
@@ -229,7 +314,7 @@
     
     // If we have less than 1 second remaining or have reached max attempts, we're done
     if (remainingTime <= 1 || seekAttempts >= config.maxSeekAttempts) {
-      debugLog('Buffering complete or max attempts reached');
+      successLog('Buffering complete or max attempts reached');
       stopBuffering();
       return;
     }
@@ -285,6 +370,11 @@
       });
     } catch (error) {
       // Ignore errors from disconnected port
+    }
+    
+    // Add success log when we finish buffering
+    if (isBuffering) {
+      successLog('Buffering finished');
     }
   };
   
@@ -456,11 +546,17 @@
       return;
     }
     
+    // Log the YouTube video ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoId = urlParams.get('v');
+    debugLog(`Monitoring YouTube video ID: ${videoId}`);
+    
     // Set up video element observer
     const observer = setupVideoObserver();
     
     // Clean up when navigating away
     window.addEventListener('beforeunload', () => {
+      debugLog('Page unloading, cleaning up');
       stopBufferMonitoring();
       if (observer) {
         observer.disconnect();

@@ -27,10 +27,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.data.status === 'complete') {
       extensionState.fixedVideos++;
     }
+    
+    // Forward to popup if it's open
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Popup might not be open, ignore the error
+    });
   }
   
   if (message.type === 'LOADING_FIX') {
     logWithTime(`Loading fix attempt: ${message.data.attempt} of ${message.data.max}`);
+    
+    // Forward to popup if it's open
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Popup might not be open, ignore the error
+    });
+  }
+  
+  if (message.type === 'LOG_MESSAGE') {
+    logWithTime(`Log: ${message.data.message}`);
+    
+    // Forward to popup if it's open
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Popup might not be open, ignore the error
+    });
   }
   
   return true;
