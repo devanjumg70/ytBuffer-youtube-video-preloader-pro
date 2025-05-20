@@ -128,6 +128,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     }
     
+    else if (message.type === 'GET_STATS') {
+      // Send current stats to popup
+      chrome.runtime.sendMessage({
+        type: 'STATS_UPDATE',
+        data: {
+          fixedVideos: extensionState.fixedVideos,
+          activeTabCount: extensionState.activeTabIds.size
+        }
+      }).catch(() => {
+        // Popup might not be open, ignore the error
+      });
+    }
+    
     else if (message.type === 'UPDATE_SETTINGS') {
       // Update settings from popup
       extensionState.settings = message.data;
